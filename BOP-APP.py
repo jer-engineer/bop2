@@ -12,7 +12,7 @@ st.set_page_config(page_title="Cloud Weld Manager Pro", layout="wide", page_icon
 # Εδώ ορίζουμε τα Defaults που ζήτησες
 DEFAULT_LINE_COL = "LINE No"
 DEFAULT_WELD_COL = "Weld No"
-DEFAULT_REF_COLS = ["TYPE 1", "TYPE 2", "SYSTEM","WELDER"] # <--- ΤΑ ΝΕΑ DEFAULTS
+DEFAULT_REF_COLS = ["TYPE 1","Material 1", "TYPE 2","Material 2", "TKH", "WELD INCHES", "SYSTEM","WELDER"] # <--- ΤΑ ΝΕΑ DEFAULTS
 REPO_MASTER_FILE = "bop.xlsx"
 # --- 0. ΛΕΙΤΟΥΡΓΙΕΣ ΑΠΟΘΗΚΕΥΣΗΣ (PERSISTENCE) ---
 SETTINGS_FILE = "settings.json"
