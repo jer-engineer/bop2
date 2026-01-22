@@ -3,11 +3,6 @@ import pandas as pd
 import io
 import os
 import json 
-# --- DEBUGGING ---
-st.write("📂 Τρέχων φάκελος:", os.getcwd())
-st.write("📂 Αρχεία σε αυτόν τον φάκελο:", os.listdir(os.getcwd()))
-# -----------------
-
 from datetime import datetime
 
 # --- ΡΥΘΜΙΣΕΙΣ ΣΕΛΙΔΑΣ ---
