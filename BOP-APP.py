@@ -2,21 +2,21 @@ import streamlit as st
 import pandas as pd
 import io
 import os
-import json 
+import json
+import math  # <--- Προστέθηκε για τον υπολογισμό των γραμμών
 from datetime import datetime
 
 # --- ΡΥΘΜΙΣΕΙΣ ΣΕΛΙΔΑΣ ---
 st.set_page_config(page_title="Cloud Weld Manager Pro", layout="wide", page_icon="🏗️")
 
 # --- DEFAULT CONSTANTS ---
-# Εδώ ορίζουμε τα Defaults που ζήτησες
 DEFAULT_LINE_COL = "LINE No"
 DEFAULT_WELD_COL = "Weld No"
-DEFAULT_REF_COLS = ["TYPE 1","Material 1", "TYPE 2","Material 2", "TKH", "WELD INCHES", "SYSTEM","WELDER"] # <--- ΤΑ ΝΕΑ DEFAULTS
+DEFAULT_REF_COLS = ["TYPE 1","Material 1", "TYPE 2","Material 2", "TKH", "WELD INCHES", "SYSTEM","WELDER"]
 REPO_MASTER_FILE = "bop.xlsx"
-# --- 0. ΛΕΙΤΟΥΡΓΙΕΣ ΑΠΟΘΗΚΕΥΣΗΣ (PERSISTENCE) ---
 SETTINGS_FILE = "settings.json"
 
+# --- 0. ΛΕΙΤΟΥΡΓΙΕΣ ΑΠΟΘΗΚΕΥΣΗΣ (PERSISTENCE) ---
 def load_settings():
     """Φορτώνει τις ρυθμίσεις από το αρχείο αν υπάρχει."""
     if os.path.exists(SETTINGS_FILE):
@@ -48,23 +48,20 @@ if 'master_df' not in st.session_state:
 if 'production_log' not in st.session_state:
     st.session_state.production_log = pd.DataFrame() 
 if 'master_source' not in st.session_state:
-    st.session_state.master_source = "None" # Για να ξέρουμε από πού φορτώθηκε
+    st.session_state.master_source = "None"
 
 # --- AUTO-LOAD MASTER FROM REPO/GITHUB ---
-# Αυτό το κομμάτι τρέχει μία φορά στην αρχή. Ψάχνει το master.xlsx
 if st.session_state.master_df is None:
     if os.path.exists(REPO_MASTER_FILE):
         try:
-            # Προσπάθεια αυτόματης φόρτωσης
             df_auto = pd.read_excel(REPO_MASTER_FILE)
-            # Καθαρισμός ονομάτων στηλών
             df_auto.columns = df_auto.columns.astype(str).str.strip()
             st.session_state.master_df = df_auto
             st.session_state.master_source = "Auto-Repo"
         except Exception as e:
             print(f"Failed to auto-load: {e}")
 
-# --- INITIALIZE VARIABLES WITH SAVED OR DEFAULT VALUES ---
+# --- INITIALIZE VARIABLES ---
 if 'col_line_name' not in st.session_state:
     st.session_state.col_line_name = saved_config.get("col_line_name", DEFAULT_LINE_COL)
 
@@ -75,7 +72,6 @@ if 'auto_fill_columns' not in st.session_state:
     st.session_state.auto_fill_columns = saved_config.get("auto_fill_columns", [])
 
 if 'production_ref_columns' not in st.session_state:
-    # Εδώ βάζουμε τα Default που ζήτησες (TYPE 1, TYPE 2, SYSTEM)
     st.session_state.production_ref_columns = saved_config.get("production_ref_columns", DEFAULT_REF_COLS)
 
 if 'custom_free_columns' not in st.session_state:
@@ -91,7 +87,6 @@ with st.sidebar:
                          "⚙️ Settings & Setup"])
     st.divider()
     
-    # Ένδειξη Status Master File
     if st.session_state.master_df is not None:
         st.success(f"Master: Loaded ({st.session_state.master_source})")
         st.caption(f"Lines: {len(st.session_state.master_df)}")
@@ -109,8 +104,7 @@ if app_mode == "🔨 Daily Production":
     st.header("🔨 Καταγραφή Παραγωγής")
     
     if st.session_state.master_df is None:
-        st.warning(f"⚠️ Δεν βρέθηκε '{REPO_MASTER_FILE}' στο φάκελο και δεν έχει φορτωθεί χειροκίνητα.")
-        st.info("Πήγαινε στα Settings για Upload ή βεβαιώσου ότι το αρχείο υπάρχει στο GitHub repo.")
+        st.warning(f"⚠️ Δεν βρέθηκε '{REPO_MASTER_FILE}' και δεν έχει φορτωθεί αρχείο.")
         master = pd.DataFrame()
         lines = []
         LINE_COL = st.session_state.col_line_name
@@ -135,9 +129,8 @@ if app_mode == "🔨 Daily Production":
         sel_line = c_sel1.text_input("Line No (Manual)")
         sel_weld = c_sel2.text_input("Weld No (Manual)")
 
-    # --- 2. LIVE INFO PANEL ---
+    # --- 2. LIVE INFO PANEL (ΤΡΟΠΟΠΟΙΗΜΕΝΟ ΓΙΑ 2 ΣΕΙΡΕΣ) ---
     if st.session_state.master_df is not None and sel_line and sel_weld:
-        # Χρήση των (πλέον default) στηλών
         valid_ref_cols = [col for col in st.session_state.production_ref_columns if col in master.columns]
         
         if valid_ref_cols:
@@ -146,9 +139,18 @@ if app_mode == "🔨 Daily Production":
                 st.info("ℹ️ Στοιχεία Κόλλησης (Από Master)")
                 ref_data = row[valid_ref_cols].iloc[0].to_dict()
                 
-                cols = st.columns(len(ref_data))
-                for idx, (k, v) in enumerate(ref_data.items()):
-                    cols[idx % len(cols)].metric(label=k, value=str(v))
+                # --- LOGIC ΓΙΑ DISPLAY ΣΕ 2 ΣΕΙΡΕΣ ---
+                items = list(ref_data.items())
+                if items:
+                    # Υπολογισμός: Αν είναι 8 στοιχεία, 4 ανά σειρά. Αν είναι 9, 5 στην πρώτη, 4 στη δεύτερη.
+                    chunk_size = math.ceil(len(items) / 2)
+                    
+                    # Loop που "σπάει" τα items ανά chunk_size (δηλαδή στη μέση)
+                    for i in range(0, len(items), chunk_size):
+                        batch = items[i : i + chunk_size]
+                        cols = st.columns(len(batch))
+                        for idx, (k, v) in enumerate(batch):
+                            cols[idx].metric(label=k, value=str(v))
     
     st.divider()
 
@@ -266,7 +268,6 @@ elif app_mode == "⚙️ Settings & Setup":
     # --- A. HEADER & UPLOAD ---
     with st.expander("1. Διαχείριση Master Excel", expanded=True):
         
-        # ΕΝΔΕΙΞΗ ΑΥΤΟΜΑΤΗΣ ΦΟΡΤΩΣΗΣ
         if st.session_state.master_df is not None and st.session_state.master_source == "Auto-Repo":
             st.success(f"✅ Master loaded automatically from: {REPO_MASTER_FILE}")
             st.caption("Μπορείς να ανεβάσεις νέο αρχείο παρακάτω για να το αντικαταστήσεις προσωρινά.")
@@ -314,7 +315,6 @@ elif app_mode == "⚙️ Settings & Setup":
         with tab1:
             st.info("Ποιες στήλες του Master να αντιγράφονται στο Log;")
             valid_defaults = [c for c in st.session_state.auto_fill_columns if c in all_cols]
-            # key="ms_auto_fill" για αποφυγή duplicate ID error
             sel_auto = st.multiselect("Επίλεξε στήλες:", all_cols, default=valid_defaults, key="ms_auto_fill")
             if st.button("💾 Save Auto-Fill"):
                 st.session_state.auto_fill_columns = sel_auto
@@ -324,7 +324,6 @@ elif app_mode == "⚙️ Settings & Setup":
         with tab2:
             st.info("Ποιες στήλες να φαίνονται στο μπλε πλαίσιο πληροφοριών (Live Panel);")
             valid_defaults_ref = [c for c in st.session_state.production_ref_columns if c in all_cols]
-            # key="ms_ref_cols" για αποφυγή duplicate ID error
             sel_ref = st.multiselect("Επίλεξε στήλες:", all_cols, default=valid_defaults_ref, key="ms_ref_cols")
             if st.button("💾 Save Reference"):
                 st.session_state.production_ref_columns = sel_ref
