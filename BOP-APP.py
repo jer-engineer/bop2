@@ -143,7 +143,7 @@ if app_mode == "🔨 Daily Production":
                 items = list(ref_data.items())
                 if items:
                     # --- ΑΛΛΑΓΗ ΕΔΩ: ΔΙΑΙΡΕΣΗ ΜΕ 3 ΓΙΑ ΤΡΕΙΣ ΣΕΙΡΕΣ ---
-                    chunk_size = math.ceil(len(items) / 3)
+                    chunk_size = math.ceil(len(items) / 4)
                     
                     for i in range(0, len(items), chunk_size):
                         batch = items[i : i + chunk_size]
