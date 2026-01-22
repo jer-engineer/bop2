@@ -1,9 +1,10 @@
+
 import streamlit as st
 import pandas as pd
 import io
 import os
 import json
-import math  # <--- Προστέθηκε για τον υπολογισμό των γραμμών
+import math  # <--- Απαραίτητο για τον υπολογισμό
 from datetime import datetime
 
 # --- ΡΥΘΜΙΣΕΙΣ ΣΕΛΙΔΑΣ ---
@@ -129,7 +130,7 @@ if app_mode == "🔨 Daily Production":
         sel_line = c_sel1.text_input("Line No (Manual)")
         sel_weld = c_sel2.text_input("Weld No (Manual)")
 
-    # --- 2. LIVE INFO PANEL (ΤΡΟΠΟΠΟΙΗΜΕΝΟ ΓΙΑ 2 ΣΕΙΡΕΣ) ---
+    # --- 2. LIVE INFO PANEL (ΤΡΟΠΟΠΟΙΗΜΕΝΟ ΓΙΑ 3 ΣΕΙΡΕΣ) ---
     if st.session_state.master_df is not None and sel_line and sel_weld:
         valid_ref_cols = [col for col in st.session_state.production_ref_columns if col in master.columns]
         
@@ -139,13 +140,11 @@ if app_mode == "🔨 Daily Production":
                 st.info("ℹ️ Στοιχεία Κόλλησης (Από Master)")
                 ref_data = row[valid_ref_cols].iloc[0].to_dict()
                 
-                # --- LOGIC ΓΙΑ DISPLAY ΣΕ 2 ΣΕΙΡΕΣ ---
                 items = list(ref_data.items())
                 if items:
-                    # Υπολογισμός: Αν είναι 8 στοιχεία, 4 ανά σειρά. Αν είναι 9, 5 στην πρώτη, 4 στη δεύτερη.
-                    chunk_size = math.ceil(len(items) / 2)
+                    # --- ΑΛΛΑΓΗ ΕΔΩ: ΔΙΑΙΡΕΣΗ ΜΕ 3 ΓΙΑ ΤΡΕΙΣ ΣΕΙΡΕΣ ---
+                    chunk_size = math.ceil(len(items) / 3)
                     
-                    # Loop που "σπάει" τα items ανά chunk_size (δηλαδή στη μέση)
                     for i in range(0, len(items), chunk_size):
                         batch = items[i : i + chunk_size]
                         cols = st.columns(len(batch))
