@@ -1,10 +1,9 @@
-
 import streamlit as st
 import pandas as pd
 import io
 import os
 import json
-import math  # <--- Απαραίτητο για τον υπολογισμό
+import math
 from datetime import datetime
 
 # --- ΡΥΘΜΙΣΕΙΣ ΣΕΛΙΔΑΣ ---
@@ -130,7 +129,7 @@ if app_mode == "🔨 Daily Production":
         sel_line = c_sel1.text_input("Line No (Manual)")
         sel_weld = c_sel2.text_input("Weld No (Manual)")
 
-    # --- 2. LIVE INFO PANEL (ΤΡΟΠΟΠΟΙΗΜΕΝΟ ΓΙΑ 3 ΣΕΙΡΕΣ) ---
+    # --- 2. LIVE INFO PANEL (3 ΣΕΙΡΕΣ) ---
     if st.session_state.master_df is not None and sel_line and sel_weld:
         valid_ref_cols = [col for col in st.session_state.production_ref_columns if col in master.columns]
         
@@ -142,8 +141,8 @@ if app_mode == "🔨 Daily Production":
                 
                 items = list(ref_data.items())
                 if items:
-                    # --- ΑΛΛΑΓΗ ΕΔΩ: ΔΙΑΙΡΕΣΗ ΜΕ 3 ΓΙΑ ΤΡΕΙΣ ΣΕΙΡΕΣ ---
-                    chunk_size = math.ceil(len(items) / 4)
+                    # ΔΙΑΙΡΕΣΗ ΜΕ 3 ΓΙΑ 3 ΣΕΙΡΕΣ
+                    chunk_size = math.ceil(len(items) / 3)
                     
                     for i in range(0, len(items), chunk_size):
                         batch = items[i : i + chunk_size]
@@ -157,20 +156,29 @@ if app_mode == "🔨 Daily Production":
     with st.form("entry_form"):
         st.subheader("Στοιχεία Καταχώρησης")
         
+        # --- ΣΕΙΡΑ 1: ΗΜΕΡΟΜΗΝΙΕΣ & WELDER ---
         row1_c1, row1_c2, row1_c3 = st.columns(3)
-        date_val = row1_c1.date_input("Date")
-        res = row1_c2.selectbox("Result", ["Accepted", "Rejected", "Pending"])
+        date_val = row1_c1.date_input("WELD DATE")
+        # Εδώ αλλάξαμε το Result με το FIT UP DATE
+        fitup_val = row1_c2.date_input("FIT UP DATE") 
         welder = row1_c3.text_input("WELDER", value="User")
         
+        # --- ΣΕΙΡΑ 2: ΥΛΙΚΑ ---
         row2_c1, row2_c2, row2_c3 = st.columns(3)
         type1_val = row2_c1.text_input("HEAT NO TYPE 1")
         type2_val = row2_c2.text_input("HEAT NO TYPE 2")
         concumable_val = row2_c3.text_input("Filler / Consumable")
 
-        # Custom Fields
+        # --- ΣΕΙΡΑ 3: ΤΑ 3 ΝΕΑ ΠΕΔΙΑ ---
+        row3_c1, row3_c2, row3_c3 = st.columns(3)
+        extra_input_1 = row3_c1.text_input("INCHES") # <--- ΑΛΛΑΞΕ ΤΟ ΟΝΟΜΑ ΑΝ ΘΕΣ
+        extra_input_2 = row3_c2.text_input("MATERIAL") # <--- ΑΛΛΑΞΕ ΤΟ ΟΝΟΜΑ ΑΝ ΘΕΣ
+        extra_input_3 = row3_c3.text_input("SCH") # <--- ΑΛΛΑΞΕ ΤΟ ΟΝΟΜΑ ΑΝ ΘΕΣ
+
+        # Custom Fields (Αν υπάρχουν από τα settings)
         custom_values = {}
         if st.session_state.custom_free_columns:
-            st.write("📝 Extra Fields")
+            st.write("📝 Custom Fields (From Settings)")
             c_cols = st.columns(len(st.session_state.custom_free_columns))
             for idx, col_name in enumerate(st.session_state.custom_free_columns):
                 custom_values[col_name] = c_cols[idx % 3].text_input(col_name)
@@ -180,18 +188,23 @@ if app_mode == "🔨 Daily Production":
         if submitted:
             if sel_line and sel_weld:
                 formatted_date = date_val.strftime("%d/%m/%Y")
+                formatted_fitup = fitup_val.strftime("%d/%m/%Y")
 
                 new_entry = {
                     "Date": formatted_date,
                     "Line No": sel_line,
                     "Weld No": sel_weld,
+                    "FIT UP DATE": formatted_fitup, # Νέο πεδίο
                     "HEAT NO TYPE 1": type1_val,
                     "HEAT NO TYPE 2": type2_val,
                     "WELDER": welder,
                     "Filler": concumable_val,
-                    "Result": res
+                    "EXTRA INPUT 1": extra_input_1, # Νέο πεδίο
+                    "EXTRA INPUT 2": extra_input_2, # Νέο πεδίο
+                    "EXTRA INPUT 3": extra_input_3  # Νέο πεδίο
                 }
                 
+                # Auto-fill logic
                 if st.session_state.master_df is not None and st.session_state.auto_fill_columns:
                     row = master[(master[LINE_COL] == sel_line) & (master[WELD_COL] == sel_weld)]
                     if not row.empty:
