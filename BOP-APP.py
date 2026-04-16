@@ -28,6 +28,14 @@ st.markdown(
             padding: 0.75rem 1rem;
             margin-bottom: 0.6rem;
         }
+        .weld-card.welder-ok {
+            background: #1f3a2a;
+            border-color: #2f7a4e;
+        }
+        .weld-card.welder-missing {
+            background: #4a341f;
+            border-color: #b56b2c;
+        }
         .weld-card .card-header {
             font-size: 1rem;
             font-weight: 700;
@@ -156,7 +164,22 @@ def ndt_class(val: str) -> str:
         return "ok"
     return "warn"
 
-def render_cards(data: pd.DataFrame, visible_cols: list[str], second_row_cols: list[str] | None = None) -> None:
+
+def first_existing_col(columns, candidates: list[str]) -> str | None:
+    lower_map = {str(c).strip().lower(): c for c in columns}
+    for cand in candidates:
+        hit = lower_map.get(cand.lower())
+        if hit is not None:
+            return hit
+    return None
+
+def render_cards(
+    data: pd.DataFrame,
+    visible_cols: list[str],
+    second_row_cols: list[str] | None = None,
+    header_extra: list[str] | None = None,
+    welder_bg: bool = False,
+) -> None:
     selected_cols = [c for c in visible_cols if c in data.columns]
     key_cols = ["SYSTEM", "LINE No", "Weld No"]
     badge_cols = [c for c in selected_cols if c not in key_cols]
@@ -180,6 +203,22 @@ def render_cards(data: pd.DataFrame, visible_cols: list[str], second_row_cols: l
         system  = row.get("SYSTEM", "")
         line    = row.get("LINE No", "")
         weld    = row.get("Weld No", "")
+        welder_val = row.get(first_existing_col(data.columns, ["WELDER", "Welder", "welder"]) or "", "")
+        date_val = row.get(first_existing_col(data.columns, ["DATE", "Date", "date"]) or "", "")
+
+        card_class = "weld-card"
+        if welder_bg:
+            card_class += " welder-ok" if str(welder_val).strip() else " welder-missing"
+
+        header_parts = [f"{system or '—'} &nbsp;›&nbsp; {line or '—'} &nbsp;›&nbsp; 🔩 {weld or '—'}"]
+        if header_extra:
+            for col in header_extra:
+                if col.upper() == "WELDER":
+                    header_parts.append(f"<span class=\"badge\"><span>WELDER:</span> {welder_val or '—'}</span>")
+                elif col.upper() == "DATE":
+                    header_parts.append(f"<span class=\"badge\"><span>DATE:</span> {date_val or '—'}</span>")
+
+        header_html = " &nbsp; ".join(header_parts)
 
         row1_cols = [c for c in badge_cols if c not in second_row_set]
         row2_cols = [c for c in badge_cols if c in second_row_set]
@@ -189,9 +228,9 @@ def render_cards(data: pd.DataFrame, visible_cols: list[str], second_row_cols: l
 
         st.markdown(
             f"""
-            <div class="weld-card">
+            <div class="{card_class}">
                 <div class="card-header">
-                    {system or "—"} &nbsp;›&nbsp; {line or "—"} &nbsp;›&nbsp; 🔩 {weld or "—"}
+                    {header_html}
                 </div>
                 <div class="badge-row">
                     {badges_row1}
@@ -246,19 +285,26 @@ if count > 0:
         render_cards(filtered, JOINT_COLS)
 
     with tab3:
-        st.caption("Επίλεξε ποιες στήλες θέλεις να εμφανίζονται")
-        default_custom = [c for c in DISPLAY_COLS if c in filtered.columns]
+        st.caption("Custom compact view με WELDER / DATE και status χρώμα")
+        welder_col = first_existing_col(filtered.columns, ["WELDER", "Welder", "welder"])
+        date_col = first_existing_col(filtered.columns, ["DATE", "Date", "date"])
+        custom_options = [c for c in [welder_col, date_col] if c is not None]
         custom_cols = st.multiselect(
             "Στήλες για εμφάνιση",
-            options=filtered.columns.tolist(),
-            default=default_custom,
-            help="Dropdown με check για πολλαπλή επιλογή στηλών",
+            options=custom_options,
+            default=custom_options,
+            help="Dropdown με check (μόνο WELDER και DATE)",
         )
 
-        if custom_cols:
-            render_cards(filtered, custom_cols)
+        if custom_options:
+            render_cards(
+                filtered,
+                custom_cols,
+                header_extra=["WELDER", "DATE"],
+                welder_bg=True,
+            )
         else:
-            st.info("Επίλεξε τουλάχιστον μία στήλη για να εμφανιστούν κάρτες.")
+            st.info("Δεν βρέθηκαν στήλες WELDER/DATE στο αρχείο.")
 
     with tab4:
         st.caption("Προβολή όλων των στηλών του αρχείου")
