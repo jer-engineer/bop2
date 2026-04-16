@@ -17,7 +17,8 @@ st.markdown(
         .block-container { padding: 0.75rem 0.6rem 2rem; max-width: 900px; }
 
         /* Filter labels */
-        div[data-testid="stSelectbox"] label { font-weight: 700; font-size: 0.9rem; }
+        div[data-testid="stSelectbox"] label,
+        div[data-testid="stTextInput"] label { font-weight: 700; font-size: 0.9rem; }
 
         /* Weld card */
         .weld-card {
@@ -64,6 +65,20 @@ DISPLAY_COLS = ["SYSTEM", "LINE No", "Weld No", "WPS",
                 "PT Scope", "MT Scope", "RT Scope", "UT Scope",
                 "Preheat", "PWHT"]
 NDT_COLS     = ["PT Scope", "MT Scope", "RT Scope", "UT Scope"]
+JOINT_COLS   = [
+    "Joint Type",
+    "Shop (S) / Field (F)",
+    "WELD INCHES",
+    "THK",
+    "Material",
+    "SCH",
+    "TYPE 1",
+    "TYPE 2",
+    "Preheat",
+    "PWHT",
+    "PAGE No.",
+    "PAGE No",
+]
 
 # ── Load data ────────────────────────────────────────────────────────────────
 st.title("🔧 Welding Log")
@@ -75,8 +90,7 @@ def load_excel(source) -> pd.DataFrame:
     df = pd.read_excel(source, header=HEADER_ROW, dtype=str)
     df.columns = [str(c).strip() for c in df.columns]
     df = df.fillna("")
-    cols = [c for c in DISPLAY_COLS if c in df.columns]
-    return df[cols]
+    return df
 
 if uploaded is not None:
     df = load_excel(uploaded)
@@ -106,6 +120,14 @@ with c2:
 with c3:
     f_weld   = st.selectbox("Weld No", opts("Weld No"), index=0)
 
+t1, t2, t3 = st.columns(3)
+with t1:
+    q_system = st.text_input("SYSTEM (text)", placeholder="γράψε για μερική αναζήτηση")
+with t2:
+    q_line = st.text_input("LINE No (text)", placeholder="γράψε για μερική αναζήτηση")
+with t3:
+    q_weld = st.text_input("Weld No (text)", placeholder="γράψε για μερική αναζήτηση")
+
 filtered = df.copy()
 if f_system != "Όλα" and "SYSTEM"  in filtered.columns:
     filtered = filtered[filtered["SYSTEM"]  == f_system]
@@ -113,6 +135,12 @@ if f_line   != "Όλα" and "LINE No" in filtered.columns:
     filtered = filtered[filtered["LINE No"] == f_line]
 if f_weld   != "Όλα" and "Weld No" in filtered.columns:
     filtered = filtered[filtered["Weld No"] == f_weld]
+if q_system.strip() and "SYSTEM" in filtered.columns:
+    filtered = filtered[filtered["SYSTEM"].str.contains(q_system.strip(), case=False, na=False)]
+if q_line.strip() and "LINE No" in filtered.columns:
+    filtered = filtered[filtered["LINE No"].str.contains(q_line.strip(), case=False, na=False)]
+if q_weld.strip() and "Weld No" in filtered.columns:
+    filtered = filtered[filtered["Weld No"].str.contains(q_weld.strip(), case=False, na=False)]
 
 st.divider()
 
@@ -128,42 +156,113 @@ def ndt_class(val: str) -> str:
         return "ok"
     return "warn"
 
-if count > 0:
-    for _, row in filtered.iterrows():
-        system  = row.get("SYSTEM",  "")
+def render_cards(data: pd.DataFrame, visible_cols: list[str], second_row_cols: list[str] | None = None) -> None:
+    selected_cols = [c for c in visible_cols if c in data.columns]
+    key_cols = ["SYSTEM", "LINE No", "Weld No"]
+    badge_cols = [c for c in selected_cols if c not in key_cols]
+    second_row_set = set(second_row_cols or [])
+
+    def build_badge(row: pd.Series, col: str) -> str:
+        val = row.get(col, "")
+        display = val if str(val).strip() else "—"
+
+        if col == "WPS":
+            cls = "highlight"
+        elif col in NDT_COLS:
+            cls = ndt_class(str(val))
+        else:
+            cls = ""
+
+        class_attr = f"badge {cls}".strip()
+        return f'<span class="{class_attr}"><span>{col}:</span> {display}</span>'
+
+    for _, row in data.iterrows():
+        system  = row.get("SYSTEM", "")
         line    = row.get("LINE No", "")
         weld    = row.get("Weld No", "")
-        wps     = row.get("WPS",     "")
-        preheat = row.get("Preheat", "")
-        pwht    = row.get("PWHT",    "")
 
-        ndt_badges = ""
-        for col in NDT_COLS:
-            val = row.get(col, "")
-            cls = ndt_class(val)
-            display = val if val.strip() else "—"
-            ndt_badges += f'<span class="badge {cls}"><span>{col}:</span> {display}</span>'
-
-        extra_badges = (
-            f'<span class="badge"><span>Preheat:</span> {preheat or "—"}</span>'
-            f'<span class="badge"><span>PWHT:</span> {pwht or "—"}</span>'
-        )
+        row1_cols = [c for c in badge_cols if c not in second_row_set]
+        row2_cols = [c for c in badge_cols if c in second_row_set]
+        badges_row1 = "".join(build_badge(row, col) for col in row1_cols)
+        badges_row2 = "".join(build_badge(row, col) for col in row2_cols)
+        row2_html = f'<div class="badge-row">{badges_row2}</div>' if badges_row2 else ""
 
         st.markdown(
             f"""
             <div class="weld-card">
                 <div class="card-header">
-                    {system} &nbsp;›&nbsp; {line} &nbsp;›&nbsp; 🔩 {weld}
+                    {system or "—"} &nbsp;›&nbsp; {line or "—"} &nbsp;›&nbsp; 🔩 {weld or "—"}
                 </div>
                 <div class="badge-row">
-                    <span class="badge highlight"><span>WPS:</span> {wps or "—"}</span>
-                    {ndt_badges}
-                    {extra_badges}
+                    {badges_row1}
                 </div>
+                {row2_html}
             </div>
             """,
             unsafe_allow_html=True,
         )
+
+if count > 0:
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Κύριες Στήλες",
+        "Joint / Material",
+        "Custom Στήλες",
+        "Όλες οι Στήλες",
+    ])
+
+    with tab1:
+        st.caption("Προβολή μόνο των βασικών στηλών welding")
+        tab1_cols = DISPLAY_COLS + [
+            "WELDER",
+            "Date",
+            "Joint Type",
+            "Shop (S) / Field (F)",
+            "WELD INCHES",
+            "THK",
+            "Material",
+            "SCH",
+            "TYPE 1",
+            "TYPE 2",
+        ]
+        render_cards(
+            filtered,
+            tab1_cols,
+            second_row_cols=[
+                "WELDER",
+                "Date",
+                "Joint Type",
+                "Shop (S) / Field (F)",
+                "WELD INCHES",
+                "THK",
+                "Material",
+                "SCH",
+                "TYPE 1",
+                "TYPE 2",
+            ],
+        )
+
+    with tab2:
+        st.caption("Joint Type / Shop-Field / Weld Inches / THK / Material / SCH / TYPE 1 / TYPE 2")
+        render_cards(filtered, JOINT_COLS)
+
+    with tab3:
+        st.caption("Επίλεξε ποιες στήλες θέλεις να εμφανίζονται")
+        default_custom = [c for c in DISPLAY_COLS if c in filtered.columns]
+        custom_cols = st.multiselect(
+            "Στήλες για εμφάνιση",
+            options=filtered.columns.tolist(),
+            default=default_custom,
+            help="Dropdown με check για πολλαπλή επιλογή στηλών",
+        )
+
+        if custom_cols:
+            render_cards(filtered, custom_cols)
+        else:
+            st.info("Επίλεξε τουλάχιστον μία στήλη για να εμφανιστούν κάρτες.")
+
+    with tab4:
+        st.caption("Προβολή όλων των στηλών του αρχείου")
+        render_cards(filtered, filtered.columns.tolist())
 
     # Download
     csv = filtered.reset_index(drop=True).to_csv(index=False).encode("utf-8-sig")
